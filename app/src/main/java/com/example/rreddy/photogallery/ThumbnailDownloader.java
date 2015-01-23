@@ -24,9 +24,23 @@ public class ThumbnailDownloader<Token> extends HandlerThread {
     Map<Token, String> requestMap =
             Collections.synchronizedMap(new HashMap<Token, String>());
 
+    Handler mResponseHandler;
+    Listener<Token> mListener;
+    public interface Listener<Token> {
+        void onThumbnailDownloaded(Token token, Bitmap thumbnail);
+    }
+    public void setListener(Listener<Token> listener) {
+        mListener = listener;
+    }
+
     public ThumbnailDownloader() {
         super(TAG);
     }
+    public ThumbnailDownloader(Handler responseHandler) { /*responseHandler comes from the caller for the handler to go back to after the task is completed*/
+        super(TAG);
+        mResponseHandler = responseHandler;
+    }
+
     public void queueThumbnail(Token token, String url) {
         Log.i(TAG, "Got an URL: " + url);
         requestMap.put(token, url);
@@ -40,7 +54,18 @@ public class ThumbnailDownloader<Token> extends HandlerThread {
             byte[] bitmapBytes = new FlickrFetcher().getUrlBytes(url);
             final Bitmap bitmap = BitmapFactory
                     .decodeByteArray(bitmapBytes, 0, bitmapBytes.length);
-            Log.i(TAG, "Bitmap created");
+            Log.i(TAG, "Bitmap created"); /*created from the downloaded byteStream*/
+
+            /*now its time to inform the main/UI thread so that it could display it in the ImageView
+            * inside the GridView of the Fragment - which started the handler to download this picture*/
+            mResponseHandler.post(new Runnable() {
+                public void run() {
+                    if (requestMap.get(token) != url)
+                        return;
+                    requestMap.remove(token);
+                    mListener.onThumbnailDownloaded(token, bitmap);
+                }
+            });
         } catch (IOException ioe) {
             Log.e(TAG, "Error downloading image", ioe);
         }
@@ -61,5 +86,11 @@ public class ThumbnailDownloader<Token> extends HandlerThread {
                 }
             }
         };
+    }
+
+    /*this method is to clear the queue when the fragment dies*/
+    public void clearQueue() {
+        mHandler.removeMessages(MESSAGE_DOWNLOAD);
+        requestMap.clear();
     }
 }

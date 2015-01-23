@@ -1,7 +1,9 @@
 package com.example.rreddy.photogallery;
 
+import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -31,7 +33,14 @@ public class PhotoGalleryFragment extends Fragment {
         new FetchItemsTask().execute();
 
         /*create a background thread to say download the images using Run loop, dispatcher, message Q*/
-        mThumbnailThread = new ThumbnailDownloader<ImageView>();
+        mThumbnailThread = new ThumbnailDownloader<ImageView>(new Handler());
+        mThumbnailThread.setListener(new ThumbnailDownloader.Listener<ImageView>() {
+            public void onThumbnailDownloaded(ImageView imageView, Bitmap thumbnail) {
+                if (isVisible()) {
+                    imageView.setImageBitmap(thumbnail);
+                }
+            }
+        });
         mThumbnailThread.start();
         mThumbnailThread.getLooper();
         Log.i(TAG, "Background thread started");
@@ -52,6 +61,11 @@ public class PhotoGalleryFragment extends Fragment {
         * the fragment will not be cleaned by the OS*/
         mThumbnailThread.quit();
         Log.i(TAG, "Background thread destroyed");
+    }
+    @Override
+    public void onDestroyView() { /*clear the message-queue when the view is about to disappear*/
+        super.onDestroyView();
+        mThumbnailThread.clearQueue();
     }
 
     /* because GridView has no handy GridFragment class, you have to build your own adapter management code */
@@ -91,7 +105,7 @@ public class PhotoGalleryFragment extends Fragment {
             }
             ImageView imageView = (ImageView)convertView
                     .findViewById(R.id.gallery_item_imageView); /*all the views are defined in layout XML so get it from there*/
-            imageView.setImageResource(R.drawable.ic_launcher); /*this is just an initial picture to display while the actual images are being downloaded*/
+            //imageView.setImageResource(R.drawable.ic_launcher); /*this is just an initial picture to display while the actual images are being downloaded*/
             GalleryItem item = getItem(position);
             mThumbnailThread.queueThumbnail(imageView, item.getUrl());
             return convertView;
